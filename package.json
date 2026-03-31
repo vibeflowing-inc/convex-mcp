@@ -1,5 +1,5 @@
 {
-  "name": "@vibeflow/convex-mcp",
+  "name": "@vibeflowai/convex-mcp",
   "version": "0.1.0",
   "description": "Convex helpers for exposing MCP tools, prompts, and resources",
   "type": "module",
