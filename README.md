@@ -1,286 +1,90 @@
-# Convex MCP (beta)
+# Convex MCP
 
-Build a stateless MCP endpoint on top of Convex.
+Build a stateless MCP endpoint on top of [Convex](https://convex.dev).
+
+## Install
+
+```bash
+npm install @vibeflow/convex-mcp
+```
 
 ## Features
 
-- **Tools** - Register Convex functions as MCP tools
-- **Prompts** - Define MCP prompts with Zod args
-- **Resources** - Expose static and templated MCP resources from Convex functions
-
+- **Tools** – Expose Convex functions as MCP tools
+- **Prompts** – Define MCP prompts with Zod args
+- **Resources** – Serve static and templated MCP resources
 
 ## Quick Start
 
+Define your MCP server:
+
 ```ts
-// convex/vibeflow_mcp.ts
+// convex/mcp.ts
 import { api, internal } from "./_generated/api";
-import {
-  assistantText,
-  defineMcpServer,
-  jsonResource,
-  prompt,
-  promptResult,
-  resource,
-  resourceTemplate,
-  textResource,
-  tool,
-  userText,
-} from "convex-mcp";
+import { defineMcpServer, tool, prompt, resource, promptResult, assistantText, userText } from "@vibeflow/convex-mcp";
 
 export const mcp = defineMcpServer({
-  name: "vibeflow",
+  name: "my-app",
   version: "0.1.0",
   tools: {
     users: {
       get: tool(api.users.get, {
         kind: "query",
         description: "Fetch a user by id",
-        args: (z) => ({
-          userId: z.string().describe("The user id to fetch"),
-        }),
-      }),
-    },
-    reports: {
-      preview: tool(internal.reports.preview, {
-        kind: "action",
-        args: (z) => ({
-          payload: z.any(),
-        }),
+        args: (z) => ({ userId: z.string() }),
       }),
     },
   },
   prompts: {
     onboarding: prompt(
-      {
-        description: "Generate an onboarding prompt",
-        args: (z) => ({
-          name: z.string().describe("The user's display name"),
-          tone: z.enum(["friendly", "formal"]).optional(),
-        }),
-      },
-      async ({ name, tone }) =>
-        promptResult([
-          assistantText(`You are onboarding ${name}.`),
-          userText(`Say hello in a ${tone ?? "friendly"} tone.`),
-        ]),
+      { args: (z) => ({ name: z.string() }) },
+      async ({ name }) => promptResult([assistantText(`Welcome ${name}!`)])
     ),
   },
   resources: {
     config: resource(api.resources.config, {
       kind: "query",
-      uri: "config://application",
-      description: "Current application config",
+      uri: "config://app",
       mimeType: "application/json",
     }),
   },
-  resourceTemplates: {
-    files: {
-      byId: resourceTemplate(api.files.byId, {
-        kind: "query",
-        uriTemplate: "file://{fileId}",
-        description: "Read a file by id",
-        mimeType: "text/plain",
-        params: (z) => ({
-          fileId: z.string().describe("The file id to load"),
-        }),
-      }),
-    },
-  },
 });
 ```
 
-And the referenced Convex functions can return resource helpers:
+Mount it:
 
 ```ts
-// convex/resources.ts
-import { query } from "./_generated/server";
-import { v } from "convex/values";
-import { jsonResource, textResource } from "convex-mcp";
-
-export const config = query({
-  args: {},
-  handler: async () =>
-    jsonResource({
-      version: "1.0.0",
-      features: ["auth", "api", "ui"],
-    }),
-});
-
-export const byId = query({
-  args: { fileId: v.string() },
-  handler: async (_ctx, { fileId }) =>
-    textResource(`Contents for ${fileId}`),
-});
-```
-
-Mount it in `convex/http.ts`:
-
-```ts
+// convex/http.ts
 import { httpRouter } from "convex/server";
-import { auth } from "./auth";
-import { mcp } from "./vibeflow_mcp";
-import { bearerAuth } from "convex-mcp";
+import { mcp } from "./mcp";
 
 const http = httpRouter();
-
-auth.addHttpRoutes(http);
-mcp.addHttpRoutes(http, {
-  auth: bearerAuth({
-    env: "MCP_AUTH_TOKEN",
-    optional: true,
-  }),
-});
+mcp.addHttpRoutes(http);
 
 export default http;
 ```
 
-## Tools
-
-`tool(...)` expects `api/internal` refs only. Both `kind` and `args` are required.
-
-Tool names come from the object shape you pass:
-
-```ts
-tools: {
-  users: {
-    get: tool(api.users.get, {
-      kind: "query",
-      args: (z) => ({
-        userId: z.string(),
-      }),
-    }),
-  },
-}
-```
-
-This becomes the MCP tool name `users.get`.
-
-Since `api/internal` refs do not expose Convex validator metadata, you need to define the MCP input schema yourself.
-
-You can use callback style:
-
-```ts
-tool(api.users.get, {
-  kind: "query",
-  args: (z) => ({
-    userId: z.string().describe("The user id to fetch"),
-  }),
-})
-```
-
-or object style:
-
-```ts
-import { z } from "zod";
-
-tool(api.users.get, {
-  kind: "query",
-  args: {
-    userId: z.string(),
-  },
-})
-```
-
-Note: `z.any()` is supported. Query tools get `readOnlyHint: true` automatically unless you override it.
-
-## Prompts
-
-You can define prompts with Zod args. The handler runs inside the MCP layer, not through Convex execution.
-
-```ts
-prompt(
-  {
-    description: "Generate a prompt",
-    args: (z) => ({
-      name: z.string().describe("The user's display name"),
-      tone: z.enum(["friendly", "formal"]).optional(),
-    }),
-  },
-  async ({ name, tone }) => {
-    return promptResult([
-      assistantText(`You are helping ${name}.`),
-      userText(`Respond in a ${tone ?? "friendly"} tone.`),
-    ]);
-  },
-)
-```
-
-Prompt handlers can also return a single `PromptMessage` or an array of messages directly.
-
-### Prompt Helpers
-
-| Helper | Description |
-|--------|-------------|
-| `promptResult(messages, description?)` | Wrap messages into a prompt result |
-| `promptMessage(role, content)` | Create a prompt message |
-| `assistantText(text)` | Create an assistant text message |
-| `userText(text)` | Create a user text message |
-| `textContent(text)` | Create a text content block |
-
-## Resources
-
-Use `resource(...)` for fixed URIs and `resourceTemplate(...)` when the URI carries parameters.
-
-```ts
-resources: {
-  config: resource(api.resources.config, {
-    kind: "query",
-    uri: "config://application",
-    mimeType: "application/json",
-  }),
-},
-resourceTemplates: {
-  files: {
-    byId: resourceTemplate(api.files.byId, {
-      kind: "query",
-      uriTemplate: "file://{fileId}",
-      mimeType: "text/plain",
-      params: (z) => ({
-        fileId: z.string(),
-      }),
-    }),
-  },
-}
-```
-
-Notes:
-
-- Static resources do not accept client args; the Convex function is called with `{}`.
-- Resource templates parse params from the requested URI and pass them to your Convex function.
-- `resourceTemplate(..., { params })` is optional. If you omit it, template variables default to `z.string()`.
-- `kind` is limited to `"query"` or `"action"` for resources.
-
-### Resource Helpers
-
-| Helper | Description |
-|--------|-------------|
-| `textResource(text, options?)` | Create a text resource content item |
-| `jsonResource(value, options?)` | Create a JSON resource content item |
-| `blobResource(base64, mimeType, options?)` | Create a binary resource content item |
-| `resourceResult(...contents)` | Return multiple resource content items |
-
 ## Auth
 
 ```ts
-auth: bearerAuth({
-  env: "MCP_AUTH_TOKEN",
-  optional: true,
-})
+import { bearerAuth } from "@vibeflow/convex-mcp";
+
+mcp.addHttpRoutes(http, {
+  auth: bearerAuth({ env: "MCP_AUTH_TOKEN" }),
+});
 ```
 
-- If the env var is unset, auth is disabled
-- If the env var is set, requests must send `Authorization: Bearer <token>`
-- Auth is enforced before any tool runs
-
-## API
+## API Reference
 
 | Function | Description |
 |----------|-------------|
-| `defineMcpServer(...)` | Builds a tools/prompts/resources catalog |
-| `tool(api.foo.bar, { kind, args, ... })` | Registers a Convex function ref as an MCP tool |
-| `prompt({ args?, ... }, handler)` | Registers an MCP prompt |
-| `resource(api.foo.bar, { kind, uri, ... })` | Registers a fixed MCP resource |
-| `resourceTemplate(api.foo.bar, { kind, uriTemplate, ... })` | Registers a templated MCP resource |
-| `mcp.addHttpRoutes(http, { path?, auth? })` | Mounts `POST /mcp` on an existing Convex router |
-| `mcp.mcpHttp({ auth? })` | Returns the low-level HTTP handler if you want to mount it yourself |
-| `bearerAuth(...)` | Adds optional env-backed Bearer auth at the HTTP boundary |
+| `defineMcpServer(...)` | Create an MCP server with tools, prompts, and resources |
+| `tool(ref, opts)` | Register a Convex function as an MCP tool |
+| `prompt(opts, handler)` | Register an MCP prompt |
+| `resource(ref, opts)` | Register a fixed MCP resource |
+| `resourceTemplate(ref, opts)` | Register a templated MCP resource |
+| `bearerAuth(opts)` | Add Bearer token auth |
+
+## License
+
+[MIT](LICENSE)
