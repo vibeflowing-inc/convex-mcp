@@ -3,7 +3,7 @@
 > Try Convex MCP instantly in the cloud - works out of the box with [VibeFlow](https://app.vibeflow.ai).
 
 [![npm package](https://img.shields.io/npm/v/@vibeflowai/convex-mcp.svg)](https://npmjs.com/package/@vibeflowai/convex-mcp)
-[![Stars](https://img.shields.io/github/stars/vibeflowing-inc/convex-mcp?style=social)](https://github.com/vibeflowing-inc/convex-mcp)
+[![Stars](https://img.shields.io/github/stars/vibeflowing-inc/convex-mcp?style=social&cacheSeconds=0)](https://github.com/vibeflowing-inc/convex-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Join Discord](https://img.shields.io/badge/Join%20Discord-5865F2?logo=discord&logoColor=white)](https://discord.com/invite/Ctm2A2uEaq)
 
