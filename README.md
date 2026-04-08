@@ -1,11 +1,15 @@
 # Convex MCP
 
+> Try Convex MCP instantly in the cloud - works out of the box with [VibeFlow](https://app.vibeflow.ai).
+
 [![npm package](https://img.shields.io/npm/v/@vibeflowai/convex-mcp.svg)](https://npmjs.com/package/@vibeflowai/convex-mcp)
+[![Stars](https://img.shields.io/github/stars/vibeflowing-inc/convex-mcp?style=social)](https://github.com/vibeflowing-inc/convex-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Join Discord](https://img.shields.io/badge/Discord-Join%20Discord-5865F2?logo=discord&logoColor=white)](https://discord.gg/vibeflow)
 
 Build a stateless MCP endpoint on top of [Convex](https://convex.dev).
 
-While this package can be used with any MCP client, it is built by and works seamlessly with [VibeFlow](https://app.vibeflow.ai) — the easiest way to test, build, and automate with MCP tools.
+This package provides a simple wrapper to automatically translate your Convex backend functions into a standard MCP server, allowing any AI agent (like Claude, Cursor, etc.) to discover and interact with them.
 
 ## Testing inside VibeFlow
 
@@ -98,7 +102,7 @@ mcp.addHttpRoutes(http, {
 
 ## Authors & Contributors
 
-Built by the **VibeFlow** team
+Built by the **VibeFlow** team.
 
 For custom work or enterprise needs, reach out to Alessia & Elia directly:
 📩 founders@vibeflow.ai
