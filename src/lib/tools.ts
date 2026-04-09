@@ -1,4 +1,5 @@
 import { normalizeToolArgs } from "./schema.js";
+import { z } from "zod";
 import type {
   ConvexFunctionKind,
   DefineMcpServerOptions,
@@ -93,15 +94,46 @@ export async function invokeTool(
   tool: NormalizedToolDefinition,
   args: Record<string, unknown>,
 ) {
-  switch (tool.kind) {
-    case "query":
-      return await (ctx.runQuery as any)(tool.ref, args);
-    case "mutation":
-      return await (ctx.runMutation as any)(tool.ref, args);
-    case "action":
-      return await (ctx.runAction as any)(tool.ref, args);
+  try {
+    // 🪵 Logging (non-intrusive)
+    console.log(`[MCP] Invoking tool: ${tool.name}`);
+    console.log(`[MCP] Args:`, JSON.stringify(args, null, 2));
+
+    // ✅ Enforce validation using existing schema
+    const schema = z.object(tool.inputShape);
+    const parsed = schema.safeParse(args);
+
+    if (!parsed.success) {
+      return {
+        error: {
+          type: "VALIDATION_ERROR",
+          message: `Invalid arguments for tool "${tool.name}"`,
+          details: parsed.error.issues,
+        },
+      };
+    }
+
+    const validArgs = parsed.data;
+
+    // ⚡ Execute tool
+    switch (tool.kind) {
+      case "query":
+        return await (ctx.runQuery as any)(tool.ref, validArgs);
+      case "mutation":
+        return await (ctx.runMutation as any)(tool.ref, validArgs);
+      case "action":
+        return await (ctx.runAction as any)(tool.ref, validArgs);
+    }
+  } catch (err: any) {
+    // 🔴 Structured error handling
+    return {
+      error: {
+        type: "EXECUTION_ERROR",
+        message: err?.message || `Failed to execute tool "${tool.name}"`,
+      },
+    };
   }
-}
+} 
 
 export function tool(
   ref: ToolReference,

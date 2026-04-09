@@ -35,3 +35,56 @@ describe("tool(api/internal refs)", () => {
     ).toThrow();
   });
 });
+
+import { invokeTool } from "../src/lib/tools.js";
+import { vi } from "vitest";
+
+describe("invokeTool runtime validation", () => {
+  it("returns VALIDATION_ERROR when args are invalid", async () => {
+    const mockTool = {
+      name: "test.tool",
+      kind: "query",
+      ref: "fake.ref",
+      inputShape: {
+        jobId: z.string(),
+      },
+    };
+
+    const mockCtx = {
+      runQuery: vi.fn(),
+    };
+
+    const result = await invokeTool(
+      mockCtx as any,
+      mockTool as any,
+      {} // ❌ missing required field
+    );
+
+    expect(result).toHaveProperty("error");
+    expect(result.error.type).toBe("VALIDATION_ERROR");
+  });
+
+  it("executes tool when args are valid", async () => {
+    const mockTool = {
+      name: "test.tool",
+      kind: "query",
+      ref: "fake.ref",
+      inputShape: {
+        jobId: z.string(),
+      },
+    };
+
+    const mockCtx = {
+      runQuery: vi.fn().mockResolvedValue({ success: true }),
+    };
+
+    const result = await invokeTool(
+      mockCtx as any,
+      mockTool as any,
+      { jobId: "123" } // ✅ valid
+    );
+
+    expect(mockCtx.runQuery).toHaveBeenCalled();
+    expect(result).toEqual({ success: true });
+  });
+});
