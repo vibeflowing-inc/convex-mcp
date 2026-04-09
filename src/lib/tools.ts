@@ -1,5 +1,5 @@
 import { normalizeToolArgs } from "./schema.js";
-import { z } from "zod";
+
 import type {
   ConvexFunctionKind,
   DefineMcpServerOptions,
