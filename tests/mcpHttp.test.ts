@@ -440,6 +440,118 @@ describe("mcpHttp", () => {
     expect(response.status).toBe(200);
   });
 
+  it("handles CORS preflight when enabled", async () => {
+    const ctx = makeCtx();
+    const handler = mcp.mcpHttp({
+      cors: true,
+    });
+
+    const response = await invokeHttp(
+      handler,
+      ctx,
+      new Request("https://example.com/mcp", {
+        method: "OPTIONS",
+        headers: {
+          origin: "https://app.example.com",
+          "access-control-request-method": "POST",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get("access-control-allow-origin")).toBe("*");
+    expect(response.headers.get("access-control-allow-methods")).toContain("POST");
+    expect(response.headers.get("access-control-allow-headers")).toContain(
+      "content-type",
+    );
+  });
+
+  it("adds CORS headers to successful POST responses", async () => {
+    const ctx = makeCtx();
+    const handler = mcp.mcpHttp({
+      cors: {
+        origin: ["https://app.example.com"],
+        allowHeaders: ["content-type", "authorization"],
+        allowMethods: ["POST", "OPTIONS"],
+        exposeHeaders: ["mcp-protocol-version"],
+        maxAgeSeconds: 600,
+      },
+    });
+
+    const response = await invokeHttp(
+      handler,
+      ctx,
+      new Request("https://example.com/mcp", {
+        method: "POST",
+        headers: {
+          origin: "https://app.example.com",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/list",
+          params: {},
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("access-control-allow-origin")).toBe(
+      "https://app.example.com",
+    );
+    expect(response.headers.get("vary")).toBe("origin");
+    expect(response.headers.get("access-control-max-age")).toBe("600");
+    expect(response.headers.get("access-control-expose-headers")).toContain(
+      "mcp-protocol-version",
+    );
+  });
+
+  it("adds CORS headers to auth failures", async () => {
+    const original = process.env.MCP_AUTH_TOKEN;
+    process.env.MCP_AUTH_TOKEN = "secret";
+
+    try {
+      const ctx = makeCtx();
+      const handler = mcp.mcpHttp({
+        auth: bearerAuth({ env: "MCP_AUTH_TOKEN" }),
+        cors: {
+          origin: "https://app.example.com",
+        },
+      });
+
+      const response = await invokeHttp(
+        handler,
+        ctx,
+        new Request("https://example.com/mcp", {
+          method: "POST",
+          headers: {
+            origin: "https://app.example.com",
+            "content-type": "application/json",
+            authorization: "Bearer wrong",
+          },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: 1,
+            method: "tools/list",
+            params: {},
+          }),
+        }),
+      );
+
+      expect(response.status).toBe(401);
+      expect(response.headers.get("access-control-allow-origin")).toBe(
+        "https://app.example.com",
+      );
+    } finally {
+      if (original === undefined) {
+        delete process.env.MCP_AUTH_TOKEN;
+      } else {
+        process.env.MCP_AUTH_TOKEN = original;
+      }
+    }
+  });
+
   it("rejects non-POST requests", async () => {
     const ctx = makeCtx();
     const handler = mcp.mcpHttp();

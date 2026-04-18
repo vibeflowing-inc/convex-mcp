@@ -315,8 +315,18 @@ export interface BearerAuthConfig {
   optional: boolean;
 }
 
+export interface McpCorsConfig {
+  origin?: "*" | string | string[];
+  allowHeaders?: string[];
+  allowMethods?: string[];
+  exposeHeaders?: string[];
+  maxAgeSeconds?: number;
+  allowCredentials?: boolean;
+}
+
 export interface McpHttpOptions {
   auth?: BearerAuthConfig;
+  cors?: boolean | McpCorsConfig;
 }
 
 export interface AddMcpHttpRoutesOptions extends McpHttpOptions {
