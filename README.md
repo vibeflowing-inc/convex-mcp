@@ -100,9 +100,11 @@ mcp.addHttpRoutes(http, {
 | `resourceTemplate(ref, opts)` | Register a templated MCP resource |
 | `bearerAuth(opts)` | Add Bearer token auth |
 
-## Authors & Contributors
+## License
 
-Built by the **VibeFlow** team.
+[MIT](LICENSE)
+
+## Contacts
 
 For custom work or enterprise needs, reach out to Alessia & Elia directly:
 📩 founders@vibeflow.ai
@@ -112,6 +114,4 @@ For custom work or enterprise needs, reach out to Alessia & Elia directly:
 - 🌐 **Website:** [vibeflow.ai](https://vibeflow.ai)
 - 🚀 **App:** [app.vibeflow.ai](https://app.vibeflow.ai)
 
-## License
 
-[MIT](LICENSE)
