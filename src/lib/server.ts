@@ -16,6 +16,7 @@ import { errorResponse, JSON_HEADERS } from "./rpc.js";
 import { flattenTools, normalizeTool, tool } from "./tools.js";
 import type {
   AddMcpHttpRoutesOptions,
+  McpCorsConfig,
   DefineMcpServerOptions,
   McpHttpCtx,
   McpHttpOptions,
@@ -24,6 +25,126 @@ import type {
 
 export { tool };
 export { resource, resourceTemplate };
+
+const DEFAULT_CORS_ALLOW_HEADERS = [
+  "content-type",
+  "authorization",
+  "mcp-protocol-version",
+];
+const DEFAULT_CORS_ALLOW_METHODS = ["POST", "OPTIONS"];
+const DEFAULT_CORS_EXPOSE_HEADERS = ["mcp-protocol-version"];
+
+function normalizeCorsConfig(
+  cors: McpHttpOptions["cors"],
+): McpCorsConfig | null {
+  if (!cors) {
+    return null;
+  }
+
+  if (cors === true) {
+    return {
+      origin: "*",
+    };
+  }
+
+  return cors;
+}
+
+function resolveOriginHeader(
+  cors: McpCorsConfig,
+  request: Request,
+): { value: string; varyOrigin: boolean } | null {
+  const configuredOrigin = cors.origin ?? "*";
+
+  if (configuredOrigin === "*") {
+    return {
+      value: "*",
+      varyOrigin: false,
+    };
+  }
+
+  if (typeof configuredOrigin === "string") {
+    return {
+      value: configuredOrigin,
+      varyOrigin: false,
+    };
+  }
+
+  const requestOrigin = request.headers.get("origin");
+  if (!requestOrigin) {
+    return null;
+  }
+
+  if (!configuredOrigin.includes(requestOrigin)) {
+    return null;
+  }
+
+  return {
+    value: requestOrigin,
+    varyOrigin: true,
+  };
+}
+
+function getCorsHeaders(
+  cors: McpHttpOptions["cors"],
+  request: Request,
+): Headers | null {
+  const normalizedCors = normalizeCorsConfig(cors);
+  if (!normalizedCors) {
+    return null;
+  }
+
+  const origin = resolveOriginHeader(normalizedCors, request);
+  if (!origin) {
+    return null;
+  }
+
+  const headers = new Headers();
+  headers.set("access-control-allow-origin", origin.value);
+  headers.set(
+    "access-control-allow-methods",
+    (normalizedCors.allowMethods ?? DEFAULT_CORS_ALLOW_METHODS).join(", "),
+  );
+  headers.set(
+    "access-control-allow-headers",
+    (normalizedCors.allowHeaders ?? DEFAULT_CORS_ALLOW_HEADERS).join(", "),
+  );
+  headers.set(
+    "access-control-expose-headers",
+    (normalizedCors.exposeHeaders ?? DEFAULT_CORS_EXPOSE_HEADERS).join(", "),
+  );
+
+  if (normalizedCors.maxAgeSeconds !== undefined) {
+    headers.set("access-control-max-age", String(normalizedCors.maxAgeSeconds));
+  }
+
+  if (normalizedCors.allowCredentials) {
+    headers.set("access-control-allow-credentials", "true");
+  }
+
+  if (origin.varyOrigin) {
+    headers.set("vary", "origin");
+  }
+
+  return headers;
+}
+
+function withCorsHeaders(response: Response, corsHeaders: Headers | null): Response {
+  if (!corsHeaders) {
+    return response;
+  }
+
+  const headers = new Headers(response.headers);
+  corsHeaders.forEach((value, key) => {
+    headers.set(key, value);
+  });
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
 
 export function defineMcpServer(options: DefineMcpServerOptions) {
   const normalizedTools = new Map(
@@ -60,30 +181,59 @@ export function defineMcpServer(options: DefineMcpServerOptions) {
 
   function mcpHttp(httpOptions?: McpHttpOptions) {
     return httpActionGeneric(async (ctx: McpHttpCtx, request: Request) => {
+      const corsHeaders = getCorsHeaders(httpOptions?.cors, request);
+
+      if (request.method === "OPTIONS") {
+        if (!httpOptions?.cors) {
+          return new Response("Method Not Allowed", {
+            status: 405,
+            headers: {
+              allow: "POST",
+            },
+          });
+        }
+
+        return withCorsHeaders(
+          new Response(null, {
+            status: 204,
+            headers: {
+              allow: "POST, OPTIONS",
+            },
+          }),
+          corsHeaders,
+        );
+      }
+
       if (request.method !== "POST") {
-        return new Response("Method Not Allowed", {
-          status: 405,
-          headers: {
-            allow: "POST",
-          },
-        });
+        return withCorsHeaders(
+          new Response("Method Not Allowed", {
+            status: 405,
+            headers: {
+              allow: "POST",
+            },
+          }),
+          corsHeaders,
+        );
       }
 
       const authFailure = enforceAuth(httpOptions, request);
       if (authFailure) {
-        return authFailure;
+        return withCorsHeaders(authFailure, corsHeaders);
       }
 
       let body: unknown;
       try {
         body = await request.json();
       } catch {
-        return errorResponse(
-          null,
-          -32700,
-          "Parse error",
-          LATEST_PROTOCOL_VERSION,
-          400,
+        return withCorsHeaders(
+          errorResponse(
+            null,
+            -32700,
+            "Parse error",
+            LATEST_PROTOCOL_VERSION,
+            400,
+          ),
+          corsHeaders,
         );
       }
 
@@ -108,15 +258,18 @@ export function defineMcpServer(options: DefineMcpServerOptions) {
           }
         }
         if (responses.length === 0) {
-          return new Response(null, { status: 202 });
+          return withCorsHeaders(new Response(null, { status: 202 }), corsHeaders);
         }
-        return new Response(JSON.stringify(responses), {
-          status: 200,
-          headers: {
-            ...JSON_HEADERS,
-            "mcp-protocol-version": protocolVersion,
-          },
-        });
+        return withCorsHeaders(
+          new Response(JSON.stringify(responses), {
+            status: 200,
+            headers: {
+              ...JSON_HEADERS,
+              "mcp-protocol-version": protocolVersion,
+            },
+          }),
+          corsHeaders,
+        );
       }
 
       const response = await handleMessage(
@@ -130,7 +283,7 @@ export function defineMcpServer(options: DefineMcpServerOptions) {
         body,
       );
 
-      return response ?? new Response(null, { status: 202 });
+      return withCorsHeaders(response ?? new Response(null, { status: 202 }), corsHeaders);
     });
   }
 
@@ -143,8 +296,20 @@ export function defineMcpServer(options: DefineMcpServerOptions) {
       method: "POST",
       handler: mcpHttp({
         auth: routeOptions.auth,
+        cors: routeOptions.cors,
       }),
     });
+
+    if (routeOptions.cors) {
+      http.route({
+        path: routeOptions.path ?? "/mcp",
+        method: "OPTIONS",
+        handler: mcpHttp({
+          auth: routeOptions.auth,
+          cors: routeOptions.cors,
+        }),
+      });
+    }
 
     return http;
   }

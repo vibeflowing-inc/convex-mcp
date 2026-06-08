@@ -26,6 +26,7 @@ export type {
   ConvexFunctionKind,
   ConvexReadKind,
   DefineMcpServerOptions,
+  McpCorsConfig,
   McpHttpRouter,
   McpHttpCtx,
   McpHttpOptions,

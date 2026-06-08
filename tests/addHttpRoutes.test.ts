@@ -34,4 +34,31 @@ describe("addHttpRoutes", () => {
       }),
     );
   });
+
+  it("mounts OPTIONS when CORS is enabled", () => {
+    const route = vi.fn();
+
+    mcp.addHttpRoutes(
+      { route } as unknown as { route: (spec: unknown) => void },
+      { cors: true },
+    );
+
+    expect(route).toHaveBeenCalledTimes(2);
+    expect(route).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        path: "/mcp",
+        method: "POST",
+        handler: expect.anything(),
+      }),
+    );
+    expect(route).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        path: "/mcp",
+        method: "OPTIONS",
+        handler: expect.anything(),
+      }),
+    );
+  });
 });
