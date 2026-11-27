@@ -44,7 +44,7 @@ export function normalizePrompt(
     throw new Error(`Prompt name "${name}" must be a dot-delimited path.`);
   }
 
-  const { inputShape } = normalizeToolArgs(
+  const { inputSchema, inputShape } = normalizeToolArgs(
     EMPTY_OBJECT_VALIDATOR,
     definition.args,
   );
@@ -54,6 +54,7 @@ export function normalizePrompt(
     title: definition.title,
     description: definition.description,
     arguments: toPromptArguments(inputShape as any),
+    inputSchema,
     inputShape,
     handler: definition.handler,
   };

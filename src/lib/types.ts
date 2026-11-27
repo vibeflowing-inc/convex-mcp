@@ -95,19 +95,21 @@ export type ToolArgsBuilder = ToolArgsSchema &
     inferred: ToolArgsSchema;
     shape: ToolArgsShape;
   };
+export type ToolArgsPipe = z.ZodPipe<ToolArgsSchema, z.ZodTypeAny>;
 export type ToolArgsInput =
   | ToolArgsShape
   | ToolArgsSchema
-  | ((builder: ToolArgsBuilder) => ToolArgsShape | ToolArgsSchema);
+  | ToolArgsPipe
+  | ((builder: ToolArgsBuilder) => ToolArgsShape | ToolArgsSchema | ToolArgsPipe);
 
 type ArgsSchemaFromInput<TArgs extends ToolArgsInput> =
   TArgs extends (...args: never[]) => infer R
-    ? R extends ToolArgsSchema
+    ? R extends ToolArgsSchema | ToolArgsPipe
       ? R
       : R extends ToolArgsShape
         ? z.ZodObject<R>
         : ToolArgsSchema
-    : TArgs extends ToolArgsSchema
+    : TArgs extends ToolArgsSchema | ToolArgsPipe
       ? TArgs
       : TArgs extends ToolArgsShape
         ? z.ZodObject<TArgs>
@@ -262,6 +264,8 @@ export interface NormalizedToolDefinition {
   description?: string;
   annotations?: ToolAnnotations;
   ref: ToolReference;
+  /** Full args schema, including object-level refinements and transforms. */
+  inputSchema: z.ZodTypeAny;
   inputShape: Record<string, z.ZodTypeAny>;
   inputSchemaJson: Record<string, unknown>;
 }
@@ -271,6 +275,8 @@ export interface NormalizedPromptDefinition {
   title?: string;
   description?: string;
   arguments?: PromptArgument[];
+  /** Full args schema, including object-level refinements and transforms. */
+  inputSchema: z.ZodTypeAny;
   inputShape: Record<string, z.ZodTypeAny>;
   handler: PromptHandler<any>;
 }
@@ -297,6 +303,8 @@ export interface NormalizedResourceTemplateDefinition {
   description?: string;
   mimeType?: string;
   annotations?: Annotations;
+  /** Full args schema, including object-level refinements and transforms. */
+  inputSchema: z.ZodTypeAny;
   inputShape: Record<string, z.ZodTypeAny>;
 }
 

@@ -49,7 +49,7 @@ export function normalizeTool(
     );
   }
 
-  const { inputShape, inputSchemaJson } = normalizeToolArgs(
+  const { inputSchema, inputShape, inputSchemaJson } = normalizeToolArgs(
     EMPTY_OBJECT_VALIDATOR,
     definition.args,
   );
@@ -61,6 +61,7 @@ export function normalizeTool(
     title: definition.title,
     description: definition.description,
     annotations: normalizeAnnotations(definition.kind, definition.annotations),
+    inputSchema,
     inputShape,
     inputSchemaJson,
   };

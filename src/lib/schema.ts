@@ -180,12 +180,30 @@ export function convexArgsToZodObject(
   return z.object(convexArgsToZodShape(validator));
 }
 
-function asZodObject(
-  schema:
-    | Record<string, z.ZodTypeAny>
-    | z.ZodObject<Record<string, z.ZodTypeAny>>,
-) {
-  return schema instanceof z.ZodObject ? schema : z.object(schema);
+type ArgsObjectSchema = z.ZodObject<Record<string, z.ZodTypeAny>>;
+
+/**
+ * Accepts a raw shape, a ZodObject (including object-level refinements,
+ * `.strict()`, `.passthrough()`, ...) or a ZodObject piped into a transform.
+ * Returns the full schema to validate with, plus the underlying object schema
+ * used to describe the arguments.
+ */
+function resolveArgsSchema(
+  schema: Record<string, z.ZodTypeAny> | z.ZodTypeAny,
+): { full: z.ZodTypeAny; object: ArgsObjectSchema } {
+  if (schema instanceof z.ZodObject) {
+    return { full: schema, object: schema as ArgsObjectSchema };
+  }
+  if (schema instanceof z.ZodPipe && schema.in instanceof z.ZodObject) {
+    return { full: schema, object: schema.in as ArgsObjectSchema };
+  }
+  if (schema instanceof z.ZodType) {
+    throw new Error(
+      "MCP args must be a Zod object shape, a z.object(...), or a z.object(...) piped into a transform.",
+    );
+  }
+  const object = z.object(schema);
+  return { full: object, object };
 }
 
 function createArgsBuilder(
@@ -211,12 +229,13 @@ export function normalizeToolArgs(
     typeof override === "function"
       ? override(createArgsBuilder(inferred))
       : (override ?? inferred);
-  const objectSchema = asZodObject(next);
+  const { full, object } = resolveArgsSchema(next);
 
   return {
-    inputShape: objectSchema.shape,
+    inputSchema: full,
+    inputShape: object.shape,
     inputSchemaJson: dropSchemaKeyword(
-      z.toJSONSchema(objectSchema) as Record<string, unknown>,
+      z.toJSONSchema(object) as Record<string, unknown>,
     ),
   };
 }

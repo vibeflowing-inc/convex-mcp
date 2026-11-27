@@ -25,6 +25,29 @@ import type {
 export { tool };
 export { resource, resourceTemplate };
 
+/**
+ * Never let one message throw out of the HTTP action: in a batch that would
+ * discard the responses of earlier messages whose mutations already committed.
+ */
+async function safeHandleMessage(
+  ...args: Parameters<typeof handleMessage>
+): Promise<Response | null> {
+  try {
+    return await handleMessage(...args);
+  } catch (error) {
+    const [, , , , , , protocolVersion, message] = args;
+    const rawId = (message as { id?: unknown } | null)?.id;
+    const id =
+      typeof rawId === "string" || typeof rawId === "number" ? rawId : null;
+    return errorResponse(
+      id,
+      -32603,
+      error instanceof Error ? error.message : String(error),
+      protocolVersion,
+    );
+  }
+}
+
 export function defineMcpServer(options: DefineMcpServerOptions) {
   const normalizedTools = new Map(
     flattenTools(options.tools ?? {}).map(([name, definition]) => [
@@ -93,7 +116,7 @@ export function defineMcpServer(options: DefineMcpServerOptions) {
       if (Array.isArray(body)) {
         const responses = [];
         for (const message of body) {
-          const response = await handleMessage(
+          const response = await safeHandleMessage(
             ctx,
             normalizedTools,
             normalizedPrompts,
@@ -119,7 +142,7 @@ export function defineMcpServer(options: DefineMcpServerOptions) {
         });
       }
 
-      const response = await handleMessage(
+      const response = await safeHandleMessage(
         ctx,
         normalizedTools,
         normalizedPrompts,
