@@ -103,7 +103,7 @@ export function normalizeResourceTemplate(
   }
 
   const matcher = new UriTemplate(definition.uriTemplate);
-  const { inputShape } = normalizeToolArgs(
+  const { inputSchema, inputShape } = normalizeToolArgs(
     templateValidator(matcher),
     definition.params,
   );
@@ -118,6 +118,7 @@ export function normalizeResourceTemplate(
     description: definition.description,
     mimeType: definition.mimeType,
     annotations: definition.annotations,
+    inputSchema,
     inputShape,
   };
 }

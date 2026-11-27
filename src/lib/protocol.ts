@@ -2,7 +2,6 @@ import {
   LATEST_PROTOCOL_VERSION,
   SUPPORTED_PROTOCOL_VERSIONS,
 } from "@modelcontextprotocol/sdk/types.js";
-import { z } from "zod";
 
 import { toPromptResult } from "./prompts.js";
 import { findResourceByUri, invokeResource } from "./resources.js";
@@ -149,7 +148,17 @@ export async function handleMessage(
         );
       }
 
-      const resolved = findResourceByUri(resources, resourceTemplates, uri);
+      let resolved: ReturnType<typeof findResourceByUri>;
+      try {
+        resolved = findResourceByUri(resources, resourceTemplates, uri);
+      } catch (error) {
+        return errorResponse(
+          id,
+          -32602,
+          `Invalid resource URI: ${error instanceof Error ? error.message : String(error)}`,
+          protocolVersion,
+        );
+      }
       if (!resolved) {
         return errorResponse(
           id,
@@ -180,9 +189,7 @@ export async function handleMessage(
         }
       }
 
-      const parsedArgs = await z
-        .object(resolved.definition.inputShape)
-        .safeParseAsync(resolved.params);
+      const parsedArgs = await resolved.definition.inputSchema.safeParseAsync(resolved.params);
 
       if (!parsedArgs.success) {
         return errorResponse(
@@ -194,7 +201,7 @@ export async function handleMessage(
       }
 
       try {
-        const value = await invokeResource(ctx, resolved.definition, parsedArgs.data);
+        const value = await invokeResource(ctx, resolved.definition, parsedArgs.data as Record<string, unknown>);
         return okResponse(
           id,
           toReadResourceResult(value, {
@@ -246,9 +253,7 @@ export async function handleMessage(
         );
       }
 
-      const parsedArgs = await z
-        .object(prompt.inputShape)
-        .safeParseAsync(rpc.params?.arguments ?? {});
+      const parsedArgs = await prompt.inputSchema.safeParseAsync(rpc.params?.arguments ?? {});
 
       if (!parsedArgs.success) {
         return errorResponse(
@@ -295,9 +300,7 @@ export async function handleMessage(
         );
       }
 
-      const parsedArgs = await z
-        .object(tool.inputShape)
-        .safeParseAsync(rpc.params?.arguments ?? {});
+      const parsedArgs = await tool.inputSchema.safeParseAsync(rpc.params?.arguments ?? {});
 
       if (!parsedArgs.success) {
         return errorResponse(
@@ -308,12 +311,16 @@ export async function handleMessage(
         );
       }
 
+      // Only failures of the Convex function itself are tool errors. Once it
+      // has returned, a mutation has committed, so formatting the result must
+      // never turn it into an error the client might retry.
+      let value: unknown;
       try {
-        const value = await invokeTool(ctx, tool, parsedArgs.data);
-        return okResponse(id, toCallToolResult(value), protocolVersion);
+        value = await invokeTool(ctx, tool, parsedArgs.data as Record<string, unknown>);
       } catch (error) {
         return okResponse(id, toErrorToolResult(error), protocolVersion);
       }
+      return okResponse(id, toCallToolResult(value), protocolVersion);
     }
     default:
       return errorResponse(id, -32601, "Method not found", protocolVersion);

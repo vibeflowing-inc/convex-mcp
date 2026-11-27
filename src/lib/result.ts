@@ -6,11 +6,53 @@ import type {
   ResourceResponse,
 } from "./types.js";
 
-function formatStructuredValue(value: unknown) {
-  return JSON.stringify(value, null, 2);
+function bytesToBase64(bytes: Uint8Array) {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
 }
 
-export function toCallToolResult(value: unknown): CallToolResult {
+/**
+ * Converts Convex values that JSON cannot represent into JSON-safe values:
+ * - int64 (bigint) -> base-10 string
+ * - bytes (ArrayBuffer / typed arrays) -> base64 string
+ * - NaN / Infinity / -Infinity -> their string form
+ * Without this, JSON.stringify either throws (bigint) or silently loses data.
+ */
+export function toJsonSafe(value: unknown): unknown {
+  if (typeof value === "bigint") {
+    return value.toString();
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : String(value);
+  }
+  if (value instanceof ArrayBuffer) {
+    return bytesToBase64(new Uint8Array(value));
+  }
+  if (ArrayBuffer.isView(value)) {
+    return bytesToBase64(
+      new Uint8Array(value.buffer, value.byteOffset, value.byteLength),
+    );
+  }
+  if (Array.isArray(value)) {
+    return value.map(toJsonSafe);
+  }
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, toJsonSafe(item)]),
+    );
+  }
+  return value;
+}
+
+function formatStructuredValue(value: unknown) {
+  return JSON.stringify(toJsonSafe(value), null, 2) ?? "null";
+}
+
+export function toCallToolResult(rawValue: unknown): CallToolResult {
+  const value = toJsonSafe(rawValue);
   if (typeof value === "string") {
     return {
       content: [{ type: "text", text: value }],
